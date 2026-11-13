@@ -52,11 +52,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,9 +116,19 @@ fun App(hub: SensorHub) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GreenBar(title: String, onBack: (() -> Unit)? = null) {
+fun GreenBar(title: String, onBack: (() -> Unit)? = null, version: String? = null) {
     TopAppBar(
-        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (version != null) {
+                    Text(
+                        "v$version", fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f),
+                        maxLines = 1, modifier = Modifier.padding(start = 8.dp, bottom = 3.dp),
+                    )
+                }
+            }
+        },
         navigationIcon = {
             if (onBack != null) IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Tilbake")
@@ -138,7 +150,12 @@ fun HomeScreen(hub: SensorHub, open: (String) -> Unit) {
         GROUP_PHONE to "Telefon og nett",
         GROUP_OTHER to "Andre sensorar telefonen melder",
     )
-    Scaffold(topBar = { GreenBar("Sensorlab") }) { pad ->
+    // Versjonsnummeret kjem frå app/build.gradle.kts, så det følgjer kvar utgjeving.
+    val ctx = LocalContext.current
+    val version = remember {
+        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull()
+    }
+    Scaffold(topBar = { GreenBar("Frodes Sensorlab", version = version) }) { pad ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 165.dp),
             contentPadding = PaddingValues(
