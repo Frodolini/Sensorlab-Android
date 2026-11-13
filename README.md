@@ -13,9 +13,25 @@ Appen brukar ikkje nett og lagrar ingenting.
 
 Krev JDK 17 eller nyare og Android SDK (platform 35).
 
-    ./gradlew assembleDebug
+```bash
+./gradlew assembleDebug       # testversjon: app/build/outputs/apk/debug/Sensorlab-x.y-debug.apk
+./gradlew assembleRelease     # signert versjon: app/build/outputs/apk/release/Sensorlab-x.y-release.apk
+```
 
-APK-en hamnar i `app/build/outputs/apk/debug/`.
+Signert release-bygg krev fila `keystore.properties` i rotmappa (ligg **ikkje** i repoet):
+
+```properties
+storeFile=/sti/til/release.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+Ved ny versjon: auk `versionCode` (og `versionName`) i `app/build.gradle.kts`, byggj med
+`assembleRelease` og legg APK-fila ut som ein release.
+
+Ein telefon som har ein debug-versjon installert, må avinstallera han før den signerte
+versjonen kan installerast, fordi dei to er signerte med ulike nøklar.
 
 ## Lisens
 

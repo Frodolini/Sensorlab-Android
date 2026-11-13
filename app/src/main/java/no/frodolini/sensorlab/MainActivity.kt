@@ -67,7 +67,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 
-val FrodeGreen = Color(0xFF1F8A3B)
+val FrodeGreen = Color(0xFF2E7D32)      // same grøne som i Flyradar
+val FrodeGreenDark = Color(0xFF1B5E20)
 val AxisColors = listOf(Color(0xFFD9483B), Color(0xFF2E9E4F), Color(0xFF2F7DD1))
 
 class MainActivity : ComponentActivity() {
@@ -77,7 +78,7 @@ class MainActivity : ComponentActivity() {
         val hub = SensorHub(applicationContext)
         setContent {
             val dark = isSystemInDarkTheme()
-            val scheme = if (dark) darkColorScheme(primary = Color(0xFF6FD08A)) else lightColorScheme(primary = FrodeGreen)
+            val scheme = if (dark) darkColorScheme(primary = Color(0xFF81C784)) else lightColorScheme(primary = FrodeGreen)
             MaterialTheme(colorScheme = scheme) { App(hub) }
         }
     }
@@ -204,7 +205,7 @@ fun SoundCard(onClick: () -> Unit) {
 @Composable
 fun NetCard(onClick: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF14532D), contentColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = FrodeGreenDark, contentColor = Color.White),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(16.dp)) {
