@@ -2,6 +2,7 @@ package no.frodolini.sensorlab
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -13,6 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,14 +29,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -152,6 +158,14 @@ fun SoundScreen(onBack: () -> Unit) {
     val history = remember { FloatArray(HIST) }
     var count by remember { mutableIntStateOf(0) }
 
+    // Live sending til klasseskjermen. Sendarnøkkelen blir hugsa på telefonen. Brytaren startar alltid som av.
+    val prefs = remember { ctx.getSharedPreferences("sensorlab", Context.MODE_PRIVATE) }
+    val sender = remember { LiveSender() }
+    var sendKey by remember { mutableStateOf(prefs.getString("sendarnokkel", "").orEmpty()) }
+    var live by rememberSaveable { mutableStateOf(false) }
+    var askKey by remember { mutableStateOf(false) }
+    var keyError by remember { mutableStateOf(false) }
+
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(granted, owner) {
         if (!granted) return@LaunchedEffect
@@ -162,6 +176,9 @@ fun SoundScreen(onBack: () -> Unit) {
                 var redFor = 0      // samanhengande tid i raudt, ms
                 var muteLeft = 0    // pause i målinga medan alarmen pip, ms
                 var cooldown = 0    // minste tid til neste alarm, ms
+                val batch = FloatArray(5)   // målingar som ventar på å bli sende
+                var batchN = 0
+                var tick = 0
                 while (true) {
                     delay(100)
                     val raw = engine.db
@@ -185,9 +202,27 @@ fun SoundScreen(onBack: () -> Unit) {
                     count++
                     if (smooth >= limit) redMs += 100
                     frame++
+
+                    // Live: ta vare på annakvar måling (5 i sekundet) og send dei samla ein gong i sekundet.
+                    tick++
+                    if (!live || sendKey.isEmpty()) {
+                        batchN = 0
+                    } else if (sender.status == LiveSender.WRONG_KEY) {
+                        sender.status = LiveSender.IDLE
+                        live = false
+                        keyError = true
+                        askKey = true
+                    } else if (tick % 2 == 0) {
+                        batch[batchN++] = smooth
+                        if (batchN == batch.size) {
+                            sender.sendLevels(sendKey, System.currentTimeMillis(), 200, batch.copyOf(), limit, redMs / 1000)
+                            batchN = 0
+                        }
+                    }
                 }
             } finally {
                 engine.stop()
+                if (live && sendKey.isNotEmpty()) sender.sendStop(sendKey)
             }
         }
     }
@@ -214,7 +249,7 @@ fun SoundScreen(onBack: () -> Unit) {
                     verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        "Lydmålaren treng løyve til mikrofonen. Appen reknar berre ut lydnivået. Ingen lyd blir lagra eller sendt nokon stad.",
+                        "Lydmålaren treng løyve til mikrofonen. Appen reknar berre ut lydnivået. Sjølve lyden blir aldri lagra eller sendt.",
                         color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center,
                     )
                     Button(onClick = { ask.launch(Manifest.permission.RECORD_AUDIO) }, modifier = Modifier.padding(top = 20.dp)) {
@@ -240,7 +275,8 @@ fun SoundScreen(onBack: () -> Unit) {
                 val panel: @Composable (Modifier, RoundedCornerShape) -> Unit = { m, shape ->
                     Surface(shape = shape, modifier = m) {
                         Column(
-                            Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
+                            Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.Center,
                         ) {
                             frame // teikn grafen på nytt
@@ -263,6 +299,37 @@ fun SoundScreen(onBack: () -> Unit) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("Lydalarm etter 3 s i raudt", modifier = Modifier.weight(1f))
                                 Switch(checked = alarm, onCheckedChange = { alarm = it })
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Send til klasseskjermen")
+                                    Text(
+                                        when {
+                                            !live -> "Av"
+                                            sender.status == LiveSender.OK -> "Sender live"
+                                            sender.status == LiveSender.NO_NET -> "Får ikkje sendt. Sjekk nettet."
+                                            else -> "Koplar til …"
+                                        },
+                                        fontSize = 12.sp,
+                                        color = if (live && sender.status == LiveSender.NO_NET) MaterialTheme.colorScheme.error
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (!live && sendKey.isNotEmpty()) {
+                                    TextButton(onClick = { keyError = false; askKey = true }) { Text("Nøkkel") }
+                                }
+                                Switch(checked = live, onCheckedChange = { on ->
+                                    if (!on) {
+                                        live = false
+                                        sender.sendStop(sendKey)
+                                    } else if (sendKey.isEmpty()) {
+                                        keyError = false
+                                        askKey = true
+                                    } else {
+                                        sender.status = LiveSender.IDLE
+                                        live = true
+                                    }
+                                })
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val s = redMs / 1000
@@ -293,5 +360,38 @@ fun SoundScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (askKey) {
+        var input by remember { mutableStateOf(sendKey) }
+        val close = { askKey = false; keyError = false }
+        AlertDialog(
+            onDismissRequest = close,
+            title = { Text("Sendarnøkkel") },
+            text = {
+                Column {
+                    if (keyError) {
+                        Text("Nøkkelen var feil. Prøv igjen.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("Skriv inn sendarnøkkelen for klasseskjermen. Han blir hugsa på denne telefonen.")
+                    }
+                    OutlinedTextField(
+                        value = input, onValueChange = { input = it }, singleLine = true,
+                        placeholder = { Text("xxxx-xxxx-xxxx") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = input.isNotBlank(), onClick = {
+                    sendKey = LiveSender.normalizeKey(input)
+                    prefs.edit().putString("sendarnokkel", sendKey).apply()
+                    sender.status = LiveSender.IDLE
+                    close()
+                    live = true
+                }) { Text("Start sending") }
+            },
+            dismissButton = { TextButton(onClick = close) { Text("Avbryt") } },
+        )
     }
 }

@@ -5,9 +5,23 @@ Android-app som viser sensorane i telefonen i sanntid, laga for bruk i klasserom
 - Flisvegg med alle sensorar telefonen melder, pluss Wi-Fi-signal, batteritemperatur og GPS
 - Detaljskjerm med rullande graf (siste 30 sekund), min/snitt/maks og forklaring
 - Lydmålar for timen: trafikklys med justerbar grense og lydalarm som tilval
+- Live til klasseskjerm: lydmålaren kan senda lydnivået til ei nettside på storskjermen i klasserommet (tilval, av til vanleg)
 - Nettverk: Wi-Fi-tilkopling, IP-oppsett, trafikkgraf, mobilnett og skanning av nett i nærleiken
 
-Appen brukar ikkje nett og lagrar ingenting.
+Appen lagrar ingen målingar. Han brukar berre nett når du slår på «Send til klasseskjermen» i
+lydmålaren. Då blir talet for lydnivået sendt ein gong i sekundet. Sjølve lyden forlèt aldri telefonen.
+
+## Live til klasseskjermen
+
+Lydmålaren kan visast på [klasseskjermen](https://frodolini.github.io/klasseskjerm.html), saman med
+ei hjelpeliste for elevane.
+
+1. Opne lydmålaren i appen og slå på «Send til klasseskjermen».
+2. Første gong spør appen etter sendarnøkkelen. Han blir hugsa på telefonen og ligg ikkje i dette repoet.
+3. Lat lydmålaren stå open. Sendinga stoppar når du går ut av lydmålaren eller slår av brytaren.
+
+Meldingane går til databasefunksjonen `lyd_send` i Supabase, som berre slepp gjennom meldingar med
+rett sendarnøkkel og sender dei vidare til klasseskjermen på ein privat Realtime-kanal.
 
 ## Byggja
 
